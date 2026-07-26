@@ -373,7 +373,7 @@ java -jar build/libs/redis-architecture-0.0.1-SNAPSHOT.jar
 
 50,000명 동시 접속 시뮬레이션 기준, 대시보드에서 확인한 실제 측정 결과입니다.
 
-![티켓팅 아키텍처 성능 비교 대시보드](images/result-comparison.png)
+![티켓팅 아키텍처 성능 비교 대시보드](images/result_comparison.png)
 
 | 구분 | RDBMS (H2) | Redis (ZSet) | 차이 |
 |---|---|---|---|
@@ -385,7 +385,7 @@ java -jar build/libs/redis-architecture-0.0.1-SNAPSHOT.jar
 
 애플리케이션 로그에서도 적재 시작 → 적재 완료(티켓팅 시작) → 처리 종료의 3단계를 각각 확인할 수 있습니다.
 
-![애플리케이션 로그 — Redis/RDBMS 적재 및 처리 종료 시각](images/log-output.png)
+![애플리케이션 로그 — Redis/RDBMS 적재 및 처리 종료 시각](images/result_log.png)
 
 **측정 방법**
 - 소요 시간은 서버의 `System.currentTimeMillis()` 기준으로 기록되며 `GET /api/queue/result`로 조회합니다.
