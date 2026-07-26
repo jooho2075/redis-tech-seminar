@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>우리FIS 아키텍처 성능 비교 시뮬레이션</title>
+    <style>
+        body { font-family: 'Pretendard', -apple-system, sans-serif; background: #f0f2f5; margin: 0; padding: 20px; color: #333; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .dashboard { display: flex; gap: 30px; justify-content: center; max-width: 1100px; margin: 0 auto; }
+        .panel { flex: 1; background: white; padding: 40px; border-radius: 25px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); text-align: center; }
+        .rdbms-panel { border-top: 10px solid #95a5a6; }
+        .redis-panel { border-top: 10px solid #0047a0; }
+        h2 { margin-bottom: 10px; font-size: 22px; }
+        .rank-num { font-size: 72px; font-weight: bold; margin: 25px 0; letter-spacing: -2px; min-height: 86px; font-variant-numeric: tabular-nums; }
+        .rdbms-panel .rank-num { color: #7f8c8d; }
+        .redis-panel .rank-num { color: #e74c3c; }
+        .status-badge { display: inline-block; padding: 5px 15px; border-radius: 20px; font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+        .rdbms-badge { background: #eee; color: #666; }
+        .redis-badge { background: #e8f0fe; color: #0047a0; }
+        .progress-container { background: #eee; border-radius: 15px; height: 15px; margin: 30px 0; overflow: hidden; }
+        .progress-bar { height: 100%; width: 0%; transition: 0.1s linear; }
+        .btn-group { text-align: center; margin-bottom: 40px; }
+        .btn { padding: 18px 40px; font-size: 20px; cursor: pointer; border-radius: 12px; border: none; color: white; font-weight: bold; transition: 0.3s; }
+        .btn-start { background: #27ae60; box-shadow: 0 5px 15px rgba(39, 174, 96, 0.3); }
+        .btn-reset { background: #34495e; margin-left: 15px; }
+
+        /* 결과 표시 영역 스타일 */
+        .result-info { margin-top: 25px; padding: 20px; background: #fdfdfd; border: 1px dashed #ddd; border-radius: 15px; text-align: left; }
+        .result-item { margin-bottom: 8px; font-size: 15px; color: #666; display: flex; justify-content: space-between; }
+        .result-item b { color: #333; }
+        .duration-box { margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee; font-size: 20px; font-weight: 800; display: flex; justify-content: space-between; }
+        .redis-duration { color: #e74c3c; }
+        .rdbms-duration { color: #7f8c8d; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>티켓팅 아키텍처 성능 비교</h1>
+    <p>50,000명 동시 접속 시뮬레이션: RDBMS vs Redis</p>
+</div>
+
+<div class="btn-group">
+    <button id="start-btn" class="btn btn-start" onclick="startSimulation()">예매 시작 (50,000명 접속)</button>
+    <button class="btn btn-reset" onclick="resetSimulation()">초기화</button>
+</div>
+
+<div class="dashboard">
+    <div class="panel rdbms-panel">
+        <div class="status-badge rdbms-badge" id="rdbms-status">대기 중</div>
+        <h2>RDBMS</h2>
+        <div class="rank-num" id="rdbms-rank">0</div>
+        <div class="progress-container"><div id="rdbms-bar" class="progress-bar" style="background: #95a5a6;"></div></div>
+
+        <div class="result-info">
+            <div class="result-item"><span>시작 시간</span> <b id="rdbms-start-time">-</b></div>
+            <div class="result-item"><span>종료 시간</span> <b id="rdbms-end-time">-</b></div>
+            <div class="duration-box rdbms-duration"><span>총 소요 시간</span> <span id="rdbms-duration">0.00s</span></div>
+        </div>
+    </div>
+
+    <div class="panel redis-panel">
+        <div class="status-badge redis-badge" id="redis-status">대기 중</div>
+        <h2>Redis</h2>
+        <div class="rank-num" id="redis-rank">0</div>
+        <div class="progress-container"><div id="redis-bar" class="progress-bar" style="background: #e74c3c;"></div></div>
+
+        <div class="result-info">
+            <div class="result-item"><span>시작 시간</span> <b id="redis-start-time">-</b></div>
+            <div class="result-item"><span>종료 시간</span> <b id="redis-end-time">-</b></div>
+            <div class="duration-box redis-duration"><span>총 소요 시간</span> <span id="redis-duration">0.00s</span></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const userId = "user_" + Math.random().toString(36).substring(7);
+    const TOTAL_COUNT = 50000;
+    let timerId = null;
+
+    async function startSimulation() {
+        document.getElementById('start-btn').disabled = true;
+
+        // 초기 대기 인원 표시
+        document.getElementById('redis-rank').innerText = TOTAL_COUNT.toLocaleString();
+        document.getElementById('rdbms-rank').innerText = TOTAL_COUNT.toLocaleString();
+
+        // 서버에 진입 요청
+        await fetch(`/api/queue/join?userId=${userId}`, { method: 'POST' });
+        await fetch(`/api/queue/join-rdbms?userId=${userId}`, { method: 'POST' });
+
+        // 상태 및 시간 업데이트 시작 (0.1초 간격)
+        timerId = setInterval(updateAll, 100);
+    }
+
+    async function updateAll() {
+        // 1. 대기열 상태 업데이트
+        updateQueueStatus('REDIS', 'redis');
+        updateQueueStatus('RDBMS', 'rdbms');
+
+        // 2. 시간 및 결과 업데이트
+        const res = await fetch('/api/queue/result');
+        const timeData = await res.json();
+
+        displayTimeResults('redis', timeData.redisStart, timeData.redisEnd);
+        displayTimeResults('rdbms', timeData.rdbmsStart, timeData.rdbmsEnd);
+
+        // 둘 다 끝나면 인터벌 종료
+        if (timeData.redisEnd > 0 && timeData.rdbmsEnd > 0) {
+            clearInterval(timerId);
+        }
+    }
+
+    async function updateQueueStatus(mode, prefix) {
+        try {
+            const res = await fetch(`/api/queue/status?userId=${userId}&mode=${mode}`);
+            const data = await res.json();
+
+            if (data.status === "allowed") {
+                document.getElementById(`${prefix}-rank`).innerText = "🏁";
+                document.getElementById(`${prefix}-bar`).style.width = "100%";
+                document.getElementById(`${prefix}-status`).innerText = (mode === 'REDIS' ? "✅ 진입 성공" : "✅ 최종 완료");
+            } else {
+                const rank = data.rank || TOTAL_COUNT;
+                document.getElementById(`${prefix}-rank`).innerText = rank.toLocaleString();
+                document.getElementById(`${prefix}-bar`).style.width = ((TOTAL_COUNT - rank) / TOTAL_COUNT * 100) + "%";
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    function displayTimeResults(prefix, start, end) {
+        if (start > 0) {
+            const startDate = new Date(start);
+            document.getElementById(`${prefix}-start-time`).innerText = startDate.toLocaleTimeString();
+
+            let duration;
+            if (end > 0) {
+                // 종료된 경우
+                document.getElementById(`${prefix}-end-time`).innerText = new Date(end).toLocaleTimeString();
+                duration = ((end - start) / 1000).toFixed(2);
+            } else {
+                // 진행 중인 경우 실시간 경과 시간 표시
+                duration = ((Date.now() - start) / 1000).toFixed(2);
+            }
+            document.getElementById(`${prefix}-duration`).innerText = duration + "s";
+        }
+    }
+
+    async function resetSimulation() {
+        await fetch('/api/queue/reset', { method: 'POST' });
+        location.reload();
+    }
+</script>
+</body>
+</html>
